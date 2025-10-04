@@ -34,27 +34,135 @@ except ImportError as e:
     print(f"⚠️ 无法导入真实DKG模型: {e}")
     MODEL_AVAILABLE = False
 
-# 设置中文字体
-plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans']
+# 设置中文字体 - 支持Linux系统
+import matplotlib.font_manager as fm
+
+# 尝试多种中文字体
+chinese_fonts = [
+    'WenQuanYi Micro Hei',  # 文泉驿微米黑 (Linux常用)
+    'WenQuanYi Zen Hei',    # 文泉驿正黑
+    'Noto Sans CJK SC',     # Google Noto字体
+    'Source Han Sans CN',   # 思源黑体
+    'SimHei',               # 黑体 (Windows)
+    'Microsoft YaHei',      # 微软雅黑 (Windows)
+    'PingFang SC',          # 苹方 (macOS)
+    'Hiragino Sans GB',     # 冬青黑体 (macOS)
+    'DejaVu Sans'           # 备用字体
+]
+
+# 查找可用的中文字体
+available_fonts = [f.name for f in fm.fontManager.ttflist]
+selected_font = None
+
+for font in chinese_fonts:
+    if font in available_fonts:
+        selected_font = font
+        print(f"✅ 使用中文字体: {font}")
+        break
+
+if selected_font is None:
+    print("⚠️ 未找到中文字体，使用默认字体")
+    selected_font = 'DejaVu Sans'
+
+# 设置matplotlib字体
+plt.rcParams['font.sans-serif'] = [selected_font, 'DejaVu Sans']
 plt.rcParams['axes.unicode_minus'] = False
+plt.rcParams['font.size'] = 10
+
+# 设置seaborn样式
+sns.set_style("whitegrid")
+plt.style.use('default')
+
+def setup_chinese_fonts():
+    """设置中文字体显示"""
+    try:
+        # 检查系统可用字体
+        available_fonts = set([f.name for f in fm.fontManager.ttflist])
+        
+        # Linux系统常用中文字体
+        linux_fonts = ['WenQuanYi Micro Hei', 'WenQuanYi Zen Hei', 'Noto Sans CJK SC']
+        # Windows系统字体
+        windows_fonts = ['SimHei', 'Microsoft YaHei', 'KaiTi']
+        # macOS系统字体
+        macos_fonts = ['PingFang SC', 'Hiragino Sans GB']
+        
+        all_chinese_fonts = linux_fonts + windows_fonts + macos_fonts
+        
+        # 找到第一个可用的中文字体
+        for font in all_chinese_fonts:
+            if font in available_fonts:
+                plt.rcParams['font.sans-serif'] = [font] + plt.rcParams['font.sans-serif']
+                print(f"✅ 设置中文字体: {font}")
+                return font
+        
+        # 如果没有找到中文字体，尝试安装
+        print("⚠️ 未找到中文字体，尝试使用系统默认字体")
+        return None
+        
+    except Exception as e:
+        print(f"⚠️ 字体设置失败: {e}")
+        return None
 
 class RealDKGVisualizer:
     """
     真实DKG模型可视化器 - 集成enhanced_event_dkg.py
     """
     def __init__(self):
+        # 设置中文字体
+        setup_chinese_fonts()
+        
+        # 资产名称 - 提供英文备选
         self.asset_names = ['股票(SP500)', '债券(10Y)', '原油(WTI)', '黄金', '美元指数', 'VIX']
+        self.asset_names_en = ['Stocks(SP500)', 'Bonds(10Y)', 'Oil(WTI)', 'Gold', 'USD Index', 'VIX']
         self.asset_columns = ['SP500', 'Treasury_10Y', 'Oil_WTI', 'Gold', 'USD_Index', 'VIX']
         self.asset_colors = ['#2E8B57', '#4169E1', '#8B4513', '#FFD700', '#32CD32', '#FF4500']
+        
+        # 事件名称 - 提供英文备选
         self.event_names = {
             0: '货币政策', 1: '通胀冲击', 2: '经济数据', 3: '地缘政治', 4: '商品冲击',
             5: '市场崩盘', 6: '流动性危机', 7: '避险流动', 8: '央行行动', 9: '疫情影响'
+        }
+        self.event_names_en = {
+            0: 'Monetary Policy', 1: 'Inflation Shock', 2: 'Economic Data', 3: 'Geopolitical', 4: 'Commodity Shock',
+            5: 'Market Crash', 6: 'Liquidity Crisis', 7: 'Safe Haven Flow', 8: 'Central Bank Action', 9: 'Pandemic Impact'
         }
         
         # 初始化真实模型组件
         self.model = None
         self.data_collector = None
         self.training_history = {'losses': [], 'accuracies': [], 'events_detected': []}
+        
+        # 检查中文字体是否可用
+        self.use_chinese = self._test_chinese_display()
+    
+    def _test_chinese_display(self):
+        """测试中文字体是否可以正常显示"""
+        try:
+            fig, ax = plt.subplots(figsize=(1, 1))
+            ax.text(0.5, 0.5, '测试', fontsize=12)
+            plt.close(fig)
+            return True
+        except:
+            print("⚠️ 中文字体显示异常，将使用英文标签")
+            return False
+    
+    def _get_display_text(self, chinese_text, english_text):
+        """根据字体支持情况返回合适的文本"""
+        return chinese_text if self.use_chinese else english_text
+    
+    def _get_asset_name(self, index):
+        """获取资产名称"""
+        if self.use_chinese:
+            return self.asset_names[index]
+        else:
+            return self.asset_names_en[index]
+    
+    def _get_event_name(self, event_type):
+        """获取事件名称"""
+        if self.use_chinese:
+            return self.event_names.get(event_type, f'事件{event_type}')
+        else:
+            return self.event_names_en.get(event_type, f'Event{event_type}')
         
     def load_real_data(self, start_date='2020-01-01', end_date='2023-12-31'):
         """加载真实数据"""
@@ -373,7 +481,8 @@ class RealDKGVisualizer:
         self._plot_predictions_vs_actual(ax_pred_sp500, assets_df, predictions_df, 'SP500')
         self._plot_performance_summary(ax_performance, assets_df, predictions_df)
         
-        plt.suptitle('真实DKG模型：动态知识图谱与金融预测系统', fontsize=18, fontweight='bold')
+        main_title = self._get_display_text('真实DKG模型：动态知识图谱与金融预测系统', 'Real DKG Model: Dynamic Knowledge Graph & Financial Prediction System')
+        plt.suptitle(main_title, fontsize=18, fontweight='bold')
         
         plt.savefig('real_dkg_comprehensive_analysis.png', dpi=300, bbox_inches='tight')
         print("📸 综合分析图已保存为: real_dkg_comprehensive_analysis.png")
@@ -444,10 +553,11 @@ class RealDKGVisualizer:
         for node, (x, y) in pos.items():
             ax.scatter(x, y, s=1200, c=self.asset_colors[node], alpha=0.8, 
                       edgecolors='black', linewidth=2, zorder=3)
-            ax.text(x, y, self.asset_names[node].split('(')[0], ha='center', va='center', 
+            asset_name = self._get_asset_name(node).split('(')[0]
+            ax.text(x, y, asset_name, ha='center', va='center', 
                    fontsize=9, fontweight='bold', color='white', zorder=4)
         
-        ax.set_title('真实DKG动态网络结构', fontsize=12, fontweight='bold')
+        ax.set_title(self._get_display_text('真实DKG动态网络结构', 'Real DKG Dynamic Network'), fontsize=12, fontweight='bold')
         ax.set_xlim(-1.5, 1.5)
         ax.set_ylim(-1.5, 1.5)
         ax.axis('off')
@@ -463,7 +573,7 @@ class RealDKGVisualizer:
             ax.text(0.5, 0.5, '无训练历史\n(使用备用预测)', ha='center', va='center', 
                    transform=ax.transAxes, fontsize=12,
                    bbox=dict(boxstyle='round', facecolor='lightgray', alpha=0.7))
-            ax.set_title('模型训练历史', fontsize=12, fontweight='bold')
+            ax.set_title(self._get_display_text('模型训练历史', 'Model Training History'), fontsize=12, fontweight='bold')
             return
         
         epochs = range(1, len(self.training_history['losses']) + 1)
@@ -474,24 +584,24 @@ class RealDKGVisualizer:
         ax3.spines['right'].set_position(('outward', 60))
         
         # 绘制损失
-        line1 = ax.plot(epochs, self.training_history['losses'], 'b-', linewidth=2, label='训练损失')
-        ax.set_ylabel('损失', color='b')
+        line1 = ax.plot(epochs, self.training_history['losses'], 'b-', linewidth=2, label=self._get_display_text('训练损失', 'Training Loss'))
+        ax.set_ylabel(self._get_display_text('损失', 'Loss'), color='b')
         ax.tick_params(axis='y', labelcolor='b')
         
         # 绘制准确率
-        line2 = ax2.plot(epochs, self.training_history['accuracies'], 'r-', linewidth=2, label='准确率')
-        ax2.set_ylabel('准确率', color='r')
+        line2 = ax2.plot(epochs, self.training_history['accuracies'], 'r-', linewidth=2, label=self._get_display_text('准确率', 'Accuracy'))
+        ax2.set_ylabel(self._get_display_text('准确率', 'Accuracy'), color='r')
         ax2.tick_params(axis='y', labelcolor='r')
         ax2.set_ylim(0, 1)
         
         # 绘制事件检测数
         if self.training_history['events_detected']:
-            line3 = ax3.plot(epochs, self.training_history['events_detected'], 'g-', linewidth=2, label='事件检测')
-            ax3.set_ylabel('平均事件数', color='g')
+            line3 = ax3.plot(epochs, self.training_history['events_detected'], 'g-', linewidth=2, label=self._get_display_text('事件检测', 'Event Detection'))
+            ax3.set_ylabel(self._get_display_text('平均事件数', 'Avg Events'), color='g')
             ax3.tick_params(axis='y', labelcolor='g')
         
         ax.set_xlabel('Epoch')
-        ax.set_title('真实DKG模型训练历史', fontsize=12, fontweight='bold')
+        ax.set_title(self._get_display_text('真实DKG模型训练历史', 'Real DKG Model Training History'), fontsize=12, fontweight='bold')
         ax.grid(True, alpha=0.3)
         
         # 合并图例
@@ -508,11 +618,12 @@ class RealDKGVisualizer:
         
         for i, (asset, color) in enumerate(zip(normalized_prices.columns, self.asset_colors)):
             if asset in normalized_prices.columns:
+                asset_label = self._get_asset_name(i)
                 ax.plot(normalized_prices.index, normalized_prices[asset], 
-                       color=color, linewidth=2, label=self.asset_names[i], alpha=0.8)
+                       color=color, linewidth=2, label=asset_label, alpha=0.8)
         
-        ax.set_title('资产价格走势 (标准化)', fontsize=12, fontweight='bold')
-        ax.set_ylabel('相对价格 (基期=100)')
+        ax.set_title(self._get_display_text('资产价格走势 (标准化)', 'Asset Price Trends (Normalized)'), fontsize=12, fontweight='bold')
+        ax.set_ylabel(self._get_display_text('相对价格 (基期=100)', 'Relative Price (Base=100)'))
         ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         ax.grid(True, alpha=0.3)
         
@@ -527,14 +638,14 @@ class RealDKGVisualizer:
         
         if not event_cols:
             ax.text(0.5, 0.5, '无事件数据', ha='center', va='center', transform=ax.transAxes)
-            ax.set_title('事件检测结果', fontsize=12, fontweight='bold')
+            ax.set_title(self._get_display_text('事件检测结果', 'Event Detection Results'), fontsize=12, fontweight='bold')
             return
         
         # 计算各事件类型的总强度
         event_totals = {}
         for event_col in event_cols:
             event_type = int(event_col.split('_')[1])
-            event_name = self.event_names.get(event_type, f'事件{event_type}')
+            event_name = self._get_event_name(event_type)
             event_totals[event_name] = events_df[event_col].sum()
         
         # 排序并选择前8个
@@ -554,7 +665,7 @@ class RealDKGVisualizer:
             ax.set_yticks(range(len(names)))
             ax.set_yticklabels(names)
             ax.set_xlabel('累计事件强度')
-            ax.set_title('各类金融事件检测统计', fontsize=12, fontweight='bold')
+            ax.set_title(self._get_display_text('各类金融事件检测统计', 'Financial Event Detection Statistics'), fontsize=12, fontweight='bold')
             ax.grid(True, alpha=0.3, axis='x')
         else:
             ax.text(0.5, 0.5, '无有效事件检测', ha='center', va='center', transform=ax.transAxes)
@@ -589,9 +700,9 @@ class RealDKGVisualizer:
                 ax.plot(dates, acc, color=colors[i % len(colors)], 
                        linewidth=2, label=f'{asset}', alpha=0.8)
         
-        ax.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5, label='随机基准')
-        ax.set_title('DKG模型预测准确率 (20期滚动)', fontsize=12, fontweight='bold')
-        ax.set_ylabel('准确率')
+        ax.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5, label=self._get_display_text('随机基准', 'Random Baseline'))
+        ax.set_title(self._get_display_text('DKG模型预测准确率 (20期滚动)', 'DKG Model Prediction Accuracy (20-period Rolling)'), fontsize=12, fontweight='bold')
+        ax.set_ylabel(self._get_display_text('准确率', 'Accuracy'))
         ax.set_ylim(0, 1)
         ax.legend()
         ax.grid(True, alpha=0.3)
@@ -608,7 +719,7 @@ class RealDKGVisualizer:
         sns.heatmap(correlation_matrix, mask=mask, annot=True, cmap='RdYlBu_r', 
                    center=0, square=True, ax=ax, cbar_kws={"shrink": .8})
         
-        ax.set_title('资产收益率相关性矩阵', fontsize=12, fontweight='bold')
+        ax.set_title(self._get_display_text('资产收益率相关性矩阵', 'Asset Return Correlation Matrix'), fontsize=12, fontweight='bold')
         
         # 设置标签 - 使用实际的列名
         labels = [name.split('(')[0] for name in self.asset_names[:len(correlation_matrix)]]
@@ -627,14 +738,14 @@ class RealDKGVisualizer:
             
             # 绘制实际涨跌
             ax.fill_between(assets_df.index, 0, actual, alpha=0.3, color='green', 
-                           step='mid', label='实际涨跌')
+                           step='mid', label=self._get_display_text('实际涨跌', 'Actual Direction'))
             
             # 绘制预测概率
             ax.plot(assets_df.index, predicted_prob, color='red', linewidth=2, 
-                   alpha=0.8, label='DKG预测概率')
+                   alpha=0.8, label=self._get_display_text('DKG预测概率', 'DKG Prediction Probability'))
             
             # 添加决策阈值线
-            ax.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5, label='决策阈值')
+            ax.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5, label=self._get_display_text('决策阈值', 'Decision Threshold'))
             
             # 计算准确率
             predicted_binary = (predicted_prob > 0.5).astype(int)
@@ -644,8 +755,9 @@ class RealDKGVisualizer:
             precision = ((predicted_binary == 1) & (actual == 1)).sum() / max(1, (predicted_binary == 1).sum())
             recall = ((predicted_binary == 1) & (actual == 1)).sum() / max(1, (actual == 1).sum())
             
-            ax.set_title(f'{asset} 预测 vs 实际 (准确率: {accuracy:.2%})', fontsize=12, fontweight='bold')
-            ax.set_ylabel('概率 / 涨跌标志')
+            title_text = self._get_display_text(f'{asset} 预测 vs 实际 (准确率: {accuracy:.2%})', f'{asset} Prediction vs Actual (Accuracy: {accuracy:.2%})')
+            ax.set_title(title_text, fontsize=12, fontweight='bold')
+            ax.set_ylabel(self._get_display_text('概率 / 涨跌标志', 'Probability / Direction'))
             ax.set_ylim(-0.1, 1.1)
             ax.legend()
             ax.grid(True, alpha=0.3)
@@ -711,9 +823,9 @@ class RealDKGVisualizer:
             
             ax.set_xticks(range(len(assets)))
             ax.set_xticklabels([asset.replace('_', ' ') for asset in assets], rotation=45, ha='right')
-            ax.set_ylabel('准确率')
+            ax.set_ylabel(self._get_display_text('准确率', 'Accuracy'))
             ax.set_ylim(0, 1)
-            ax.set_title('各资产预测准确率总结', fontsize=12, fontweight='bold')
+            ax.set_title(self._get_display_text('各资产预测准确率总结', 'Asset Prediction Accuracy Summary'), fontsize=12, fontweight='bold')
             ax.legend()
             ax.grid(True, alpha=0.3)
         else:
@@ -749,13 +861,16 @@ class RealDKGVisualizer:
                 predicted = (pred_prob > 0.5).astype(int)
                 accuracy = (actual == predicted).mean()
                 
-                ax.set_title(f'{self.asset_names[i]} (准确率: {accuracy:.2%})', 
+                asset_name = self._get_asset_name(i)
+                accuracy_text = self._get_display_text('准确率', 'Accuracy')
+                ax.set_title(f'{asset_name} ({accuracy_text}: {accuracy:.2%})', 
                            fontsize=11, fontweight='bold')
                 ax.set_ylim(-0.1, 1.1)
                 ax.legend(fontsize=8)
                 ax.grid(True, alpha=0.3)
         
-        plt.suptitle('DKG模型各资产预测仪表板', fontsize=16, fontweight='bold')
+        dashboard_title = self._get_display_text('DKG模型各资产预测仪表板', 'DKG Model Asset Prediction Dashboard')
+        plt.suptitle(dashboard_title, fontsize=16, fontweight='bold')
         plt.tight_layout()
         
         plt.savefig('dkg_prediction_dashboard.png', dpi=300, bbox_inches='tight')
